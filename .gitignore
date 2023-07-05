@@ -1,0 +1,7 @@
+/.pytest_cache
+/.vscode
+/env
+/use_cases.txt
+/zkit.egg-info
+/zkit.pyproj
+/__pycache__
