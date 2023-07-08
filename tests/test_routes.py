@@ -180,38 +180,37 @@ def test_get_all_plans(app):
 def test_get_pillar_with_capacity_plans(app):
     with app.app_context():
         with app.test_client() as client:
-            # Arrange: Create a plan, a pillar and two capacity plans related to the pillar
-            plan = create_plan('Test Plan', startDate=datetime.now(), endDate=datetime.now())
-            db.session.add(plan)
-            db.session.commit()
+            # Create baseline data
+            id_dict = create_baseline_zbb()
+            plan_id = id_dict["plan_id"]
+            pillar_id = id_dict["pillar_id"]
+            capacity_plan_id = id_dict["capacity_plan_id"]
+            resource_type_id = id_dict["resource_type_id"]
 
-            pillar = Pillar(plan=plan.id, name='Test Pillar', abbreviation='TP')
-            db.session.add(pillar)
-            db.session.flush()
-
-            base_plan = CapacityPlan(name='Base Plan for TP', pillar=pillar.id)
-            adjustment_plan = CapacityPlan(name='Adjustment Plan for TP', pillar=pillar.id)
-
-            db.session.add(base_plan)
-            db.session.add(adjustment_plan)
-            db.session.commit()
-
-            # Act: Send a GET request to /plans/<plan_id>/pillars/<pillar_id>
-            response = client.get(f'/plans/{plan.id}/pillars/{pillar.id}')
-
-            # Assert: Check the response data
-            assert response.status_code == 200
-            data = response.get_json()
-            assert 'id' in data
-            assert data['id'] == pillar.id
-            assert data['plan'] == plan.id
-            assert data['name'] == 'Test Pillar'
-            assert data['abbreviation'] == 'TP'
+            # Execute a GET request without including 'capacityPlans'
+            response = client.get(f'/plans/{plan_id}/pillars/{pillar_id}')
             
+            # Assert the status code and pillar details
+            assert response.status_code == 200
+            data = json.loads(response.data)
+            assert data['id'] == pillar_id
+            assert data['plan'] == plan_id
+            assert 'capacityPlans' not in data
+
+            # Execute a GET request including 'capacityPlans'
+            response = client.get(f'/plans/{plan_id}/pillars/{pillar_id}?include=capacityPlans')
+            
+            # Assert the status code and pillar details
+            assert response.status_code == 200
+            data = json.loads(response.data)
+            assert data['id'] == pillar_id
+            assert data['plan'] == plan_id
             assert 'capacityPlans' in data
-            assert len(data['capacityPlans']) == 2
-            assert 'Base Plan for TP' in data['capacityPlans']
-            assert 'Adjustment Plan for TP' in data['capacityPlans']
+            assert isinstance(data['capacityPlans'], dict)
+            assert len(data['capacityPlans']) > 0
+            assert 'Test Capacity Plan' in data['capacityPlans']
+            assert data['capacityPlans']['Test Capacity Plan']['id'] == capacity_plan_id
+            assert data['capacityPlans']['Test Capacity Plan']['pillar'] == pillar_id
 
 def test_post_pillar(app):
     with app.app_context():

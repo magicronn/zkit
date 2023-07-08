@@ -264,6 +264,7 @@ class PillarCapacityPlansPostResource(Resource):
 
         return response, 201
 
+
 @api.resource('/pillars/<int:pillar_id>/capacity_plans/<int:capacity_plan_id>')
 class PillarCapacityPlansResource(Resource):
     def get(self, pillar_id, capacity_plan_id):
@@ -379,6 +380,8 @@ class PillarCapacityPlansResource(Resource):
 @api.resource('/plans/<int:plan_id>/pillars/<int:pillar_id>')
 class PlanPillarResource(Resource):
     def get(self, plan_id, pillar_id):
+        args = request.args
+        
         # Check if the Plan exists
         plan = Plan.query.get(plan_id)
         if not plan:
@@ -389,26 +392,28 @@ class PlanPillarResource(Resource):
         if not pillar:
             return {'message': f'No Pillar found with ID: {pillar_id}'}, 404
 
-        # Get all the associated CapacityPlans
-        capacity_plans = CapacityPlan.query.filter_by(pillar=pillar_id).all()
-        if not capacity_plans:
-            return {'message': f'No CapacityPlans found for Pillar with ID: {pillar_id}'}, 404
-
         pillar_data = {
             'id': pillar.id,
             'plan': pillar.plan,
             'name': pillar.name,
             'abbreviation': pillar.abbreviation,
         }
+        
+         # Check if the "include" parameter is set to 'capacityPlans'
+        if 'include' in args and args['include'] == 'capacityPlans':
+            capacity_plans_dict = {}
+            
+            # Get all the associated CapacityPlans
+            capacity_plans = CapacityPlan.query.filter_by(pillar=pillar_id).all()
 
-        capacity_plans_dict = {}
-        for capacity_plan in capacity_plans:
-            capacity_plans_dict[capacity_plan.name] = {
-                'id': capacity_plan.id,
-                'pillar': capacity_plan.pillar
-            }
+            if capacity_plans:
+                for capacity_plan in capacity_plans:
+                    capacity_plans_dict[capacity_plan.name] = {
+                        'id': capacity_plan.id,
+                        'pillar': capacity_plan.pillar
+                    }
 
-        pillar_data['capacityPlans'] = capacity_plans_dict
+            pillar_data['capacityPlans'] = capacity_plans_dict
 
         return pillar_data, 200
 
