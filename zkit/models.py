@@ -9,11 +9,11 @@ db = SQLAlchemy()
 class Plan(db.Model) :
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), nullable=False)
-    startDate = db.Column(db.Date, nullable=False)
-    endDate = db.Column(db.Date, nullable=False)
-    cntSliceMonth = db.Column(db.Integer, nullable=False, default=1)
-    cntSliceWeek = db.Column(db.Integer, nullable=False, default=0)
-    cntSliceDay = db.Column(db.Integer, nullable=False, default=0)
+    startDate = db.Column(db.Date, nullable=True)
+    endDate = db.Column(db.Date, nullable=True)
+    cntSliceMonth = db.Column(db.Integer, nullable=True, default=1)
+    cntSliceWeek = db.Column(db.Integer, nullable=True, default=0)
+    cntSliceDay = db.Column(db.Integer, nullable=True, default=0)
     cntSlices = db.Column(db.Integer, nullable=False, default=12)
 
 
@@ -31,6 +31,7 @@ class Project(db.Model):
     dueDate = db.Column(db.Date, nullable=True)
     programSpend = db.Column(db.Double, nullable=False, default=0.0)
 
+
 class ProjectEstimate(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     project = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False)
@@ -43,8 +44,6 @@ class Pillar(db.Model):
     plan = db.Column(db.Integer, db.ForeignKey('plan.id'), nullable=False)
     name = db.Column(db.String(80), nullable=False)
     abbreviation = db.Column(db.String(6), nullable=False)
-    basePlan = db.Column(db.Integer, db.ForeignKey('capacity_plan.id'), nullable=True)    
-    adjustmentPlan = db.Column(db.Integer, db.ForeignKey('capacity_plan.id'), nullable=True)
 
         
 # CapacityPlan is a resource capacity plan.  It contains an ordered list of ResourceCapacity for a plan, given that plan's cntSlices.

@@ -12,11 +12,15 @@ def get_resource_types_dict():
     resource_types_dict = {rt.name: rt for rt in resource_types}
     return resource_types_dict
 
-
 def verify_resource_capacity_types(resource_capacities, resource_types_dict):
+    
+    if resource_capacities is None:
+        return True
+    
     for rc in resource_capacities:
         if rc['resType'] not in resource_types_dict:
             return False
+        
     return True
 
 
@@ -38,6 +42,33 @@ class PlanListResource(Resource):
             })
 
         return response, 200
+    
+    def post(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('name', type=str, required=True, help='Name cannot be blank')
+        parser.add_argument('startDate', type=str, required=True, help='startDate cannot be blank')
+        parser.add_argument('endDate', type=str, required=True, help='endDate cannot be blank')
+        parser.add_argument('cntSliceMonth', type=int, required=False, help='cntSliceMonth cannot be blank')
+        parser.add_argument('cntSliceWeek', type=int, required=False, help='cntSliceWeek cannot be blank')
+        parser.add_argument('cntSliceDay', type=int, required=False, help='cntSliceDay cannot be blank')
+        parser.add_argument('cntSlices', type=int, required=True, help='cntSlices cannot be blank')
+        args = parser.parse_args()
+
+        new_plan = Plan(
+            name=args['name'], 
+            startDate=datetime.datetime.strptime(args['startDate'], '%Y-%m-%d'), 
+            endDate = datetime.datetime.strptime(args['endDate'], '%Y-%m-%d'),
+            cntSlices=args['cntSlices']
+        )
+        
+        for opt in ['cntSliceMonth', 'cntSliceWeek', 'cntSliceDay']:
+            if args[opt] is not None:
+                setattr(new_plan, opt, args[opt])
+
+        db.session.add(new_plan)
+        db.session.commit()
+
+        return {'message': 'Plan created successfully', 'id': new_plan.id}, 201
 
 
 @api.resource('/plans/<int:id>')
@@ -59,64 +90,45 @@ class PlanResource(Resource):
         }
 
         return response, 200
-
-    def post(self):
+    
+    def put(self, id):
         parser = reqparse.RequestParser()
-        parser.add_argument('name', type=str, required=True, help='Name cannot be blank')
-        parser.add_argument('startDate', type=str, required=True, help='startDate cannot be blank')
-        parser.add_argument('endDate', type=str, required=True, help='endDate cannot be blank')
-        parser.add_argument('cntSliceMonth', type=int, required=True, help='cntSliceMonth cannot be blank')
-        parser.add_argument('cntSliceWeek', type=int, required=True, help='cntSliceWeek cannot be blank')
-        parser.add_argument('cntSliceDay', type=int, required=True, help='cntSliceDay cannot be blank')
-        parser.add_argument('cntSlices', type=int, required=True, help='cntSlices cannot be blank')
+        parser.add_argument('name', type=str, required=True)
+        parser.add_argument('startDate', type=str, required=False)
+        parser.add_argument('endDate', type=str, required=False)
+        parser.add_argument('cntSliceMonth', type=int, required=False)
+        parser.add_argument('cntSliceWeek', type=int, required=False)
+        parser.add_argument('cntSliceDay', type=int, required=False)
+        parser.add_argument('cntSlices', type=int, required=False)
         args = parser.parse_args()
 
-        new_plan = Plan(
-            name=args['name'], 
-            startDate=datetime.datetime.strptime(args['startDate'], '%Y-%m-%d'), 
-            endDate = datetime.datetime.strptime(args['endDate'], '%Y-%m-%d'),
-            cntSliceMonth=args['cntSliceMonth'],
-            cntSliceWeek=args['cntSliceWeek'],
-            cntSliceDay=args['cntSliceDay'],
-            cntSlices=args['cntSlices'],
-        )
-
-        db.session.add(new_plan)
-        db.session.commit()
-
-        return {'message': 'Plan created successfully', 'id': new_plan.id}, 201
-
-    def put(self, plan_id):
-        parser = reqparse.RequestParser()
-        parser.add_argument('name', type=str, required=True, help='Name cannot be blank')
-        parser.add_argument('startDate', type=str, required=True, help='startDate cannot be blank')
-        parser.add_argument('endDate', type=str, required=True, help='endDate cannot be blank')
-        parser.add_argument('cntSliceMonth', type=int, required=True, help='cntSliceMonth cannot be blank')
-        parser.add_argument('cntSliceWeek', type=int, required=True, help='cntSliceWeek cannot be blank')
-        parser.add_argument('cntSliceDay', type=int, required=True, help='cntSliceDay cannot be blank')
-        parser.add_argument('cntSlices', type=int, required=True, help='cntSlices cannot be blank')
-        args = parser.parse_args()
-
-        plan = Plan.query.get(plan_id)
+        plan = Plan.query.get(id)
         if plan is None:
-            return {'message': f'No Plan found with ID: {plan_id}'}, 404
+            return {'message': f'No Plan found with ID: {id}'}, 404
 
-        plan.name = args['name']
-        plan.startDate = datetime.datetime.strptime(args['startDate'], '%Y-%m-%d')
-        plan.endDate = datetime.datetime.strptime(args['endDate'], '%Y-%m-%d')
-        plan.cntSliceMonth = args['cntSliceMonth']
-        plan.cntSliceWeek = args['cntSliceWeek']
-        plan.cntSliceDay = args['cntSliceDay']
-        plan.cntSlices = args['cntSlices']
+        if args['name'] is not None:
+            plan.name = args['name']
+        if args['startDate'] is not None:
+            plan.startDate = datetime.datetime.strptime(args['startDate'], '%Y-%m-%d')
+        if args['endDate'] is not None:
+            plan.endDate = datetime.datetime.strptime(args['endDate'], '%Y-%m-%d')
+        if args['cntSliceMonth'] is not None:
+            plan.cntSliceMonth = args['cntSliceMonth']
+        if args['cntSliceWeek'] is not None:
+            plan.cntSliceWeek = args['cntSliceWeek']
+        if args['cntSliceDay'] is not None:
+            plan.cntSliceDay = args['cntSliceDay']
+        if args['cntSlices'] is not None:
+            plan.cntSlices = args['cntSlices']
         
         db.session.commit()
 
-        return {'message': 'Plan updated successfully'}, 200
+        return {'message': f'Plan updated successfully with ID: {plan.id}'}, 200
 
-    def delete(self, plan_id):
-        plan = Plan.query.get(plan_id)
+    def delete(self, id):
+        plan = Plan.query.get(id)
         if plan is None:
-            return {'message': f'No Plan found with ID: {plan_id}'}, 404
+            return {'message': f'No Plan found with ID: {id}'}, 404
 
         db.session.delete(plan)
         db.session.commit()
@@ -157,51 +169,54 @@ class PlanSummaryResource(Resource):
         return plan_summary, 200
 
 
-@api.resource('/pillars/<int:pillar_id>/capacity_plans')
-class PillarCapacityPlansResource(Resource):
-    def get(self, pillar_id):
-        pillar = Pillar.query.get(pillar_id)
+@api.resource('/plans/<int:plan_id>/pillars')
+class PlanPillarListResource(Resource):
+    def get(self, plan_id):
+        pillars = Pillar.query.filter_by(plan=plan_id).all()
+        if not pillars:
+            return {'message': f'No Pillars found for Plan with ID: {plan_id}'}, 404
 
-        if pillar is None:
-            return {'message': f'No Pillar found with ID: {pillar_id}'}, 404
+        response = []
 
-        capacity_plans = CapacityPlan.query.filter_by(pillar=pillar.id).all()
-
-        if not capacity_plans:
-            return {'message': f'No Capacity Plans found for Pillar ID: {pillar_id}'}, 404
-
-        capacity_plans_list = []
-        for cp in capacity_plans:
-            # Fetch the associated ResourceCapacity objects
-            resource_capacities = ResourceCapacity.query.filter_by(capacityPlan=cp.id).all()
-
-            # Build a list of the associated ResourceCapacity objects for each CapacityPlan
-            resource_capacities_list = []
-            for rc in resource_capacities:
-                # Fetch the associated ResourceType
-                res_type = ResourceType.query.get(rc.resType)
-                resource_capacities_list.append({
-                    'id': rc.id,
-                    'resType': res_type.name if res_type else "No resource type",
-                    'planSlice': rc.planSlice,
-                    'capacity': rc.capacity
-                })
-
-            # Append the CapacityPlan and its associated ResourceCapacities to the list
-            capacity_plans_list.append({
-                'id': cp.id,
-                'name': cp.name,
-                'pillar': cp.pillar,
-                'resourceCapacities': resource_capacities_list
+        for pillar in pillars:
+            response.append({
+                'id': pillar.id,
+                'plan': pillar.plan,
+                'name': pillar.name,
+                'abbreviation': pillar.abbreviation
             })
 
-        return jsonify(capacity_plans_list)
+        return response, 200
     
+    def post(self, plan_id):
+        parser = reqparse.RequestParser()
+        parser.add_argument('name', type=str, required=True, help='Name cannot be blank')
+        parser.add_argument('abbreviation', type=str, required=True, help='Abbreviation cannot be blank')
+        args = parser.parse_args()
+
+        plan = Plan.query.get(plan_id)
+        if plan is None:
+            return {'message': f'No Plan found with ID: {plan_id}'}, 404
+
+        new_pillar = Pillar(
+            plan=plan_id,
+            name=args['name'],
+            abbreviation=args['abbreviation']
+        )
+
+        db.session.add(new_pillar)
+        db.session.commit()
+
+        return {'message': 'Pillar created successfully', 'id': new_pillar.id}, 201
+ 
+
+@api.resource('/pillars/<int:pillar_id>/capacity_plans')
+class PillarCapacityPlansPostResource(Resource):
     def post(self, pillar_id):
         parser = reqparse.RequestParser()
         parser.add_argument('name', type=str, required=True, help='Name cannot be blank')
         parser.add_argument('pillar', type=int, required=True, help='Pillar cannot be blank')
-        parser.add_argument('resourceCapacities', type=list, location='json', required=True)
+        parser.add_argument('resourceCapacities', type=list, location='json', required=False)
 
         args = parser.parse_args()
 
@@ -220,18 +235,19 @@ class PillarCapacityPlansResource(Resource):
             #TODO: Get name of ResourceType that failed verification
 
         resource_capacities_list = []
-        for rc in args['resourceCapacities']:
-            res_type = res_types[rc['resType']]
-            new_resource_capacity = ResourceCapacity(capacityPlan=new_capacity_plan.id, resType=res_type.id, planSlice=rc['planSlice'], capacity=rc['capacity'])
-            db.session.add(new_resource_capacity)
-            
-            # Add the new ResourceCapacity to the list
-            resource_capacities_list.append({
-                'id': new_resource_capacity.id,
-                'resType': res_type.name,
-                'planSlice': new_resource_capacity.planSlice,
-                'capacity': new_resource_capacity.capacity
-            })
+        if args['resourceCapacities']:
+            for rc in args['resourceCapacities']:
+                res_type = res_types[rc['resType']]
+                new_resource_capacity = ResourceCapacity(capacityPlan=new_capacity_plan.id, resType=res_type.id, planSlice=rc['planSlice'], capacity=rc['capacity'])
+                db.session.add(new_resource_capacity)
+                
+                # Add the new ResourceCapacity to the list
+                resource_capacities_list.append({
+                    'id': new_resource_capacity.id,
+                    'resType': res_type.name,
+                    'planSlice': new_resource_capacity.planSlice,
+                    'capacity': new_resource_capacity.capacity
+                })
 
         db.session.commit()
 
@@ -248,10 +264,48 @@ class PillarCapacityPlansResource(Resource):
 
         return response, 201
 
+@api.resource('/pillars/<int:pillar_id>/capacity_plans/<int:capacity_plan_id>')
+class PillarCapacityPlansResource(Resource):
+    def get(self, pillar_id, capacity_plan_id):
+        pillar = Pillar.query.get(pillar_id)
+        
+        if pillar is None:
+            return {'message': f'No Pillar found with ID: {pillar_id}'}, 404
+
+        capacity_plan = CapacityPlan.query.get(capacity_plan_id)
+
+        if capacity_plan is None or capacity_plan.pillar != pillar_id:
+            return {'message': f'No CapacityPlan found with ID: {capacity_plan_id} for Pillar ID: {pillar_id}'}, 404
+
+        # Fetch the associated ResourceCapacity objects
+        resource_capacities = ResourceCapacity.query.filter_by(capacityPlan=capacity_plan.id).all()
+
+        # Build a list of the associated ResourceCapacity objects
+        resource_capacities_list = []
+        for rc in resource_capacities:
+            # Fetch the associated ResourceType
+            res_type = ResourceType.query.get(rc.resType)
+            resource_capacities_list.append({
+                'id': rc.id,
+                'resType': res_type.name if res_type else "No resource type",
+                'planSlice': rc.planSlice,
+                'capacity': rc.capacity
+            })
+
+        # Build the response
+        response = {
+            'id': capacity_plan.id,
+            'name': capacity_plan.name,
+            'pillar': capacity_plan.pillar,
+            'resourceCapacities': resource_capacities_list
+        }
+
+        return response, 200
+    
     def put(self, pillar_id, capacity_plan_id):
         parser = reqparse.RequestParser()
         parser.add_argument('name', type=str, required=True, help='Name cannot be blank')
-        parser.add_argument('resourceCapacities', type=list, location='json', required=True)
+        parser.add_argument('resourceCapacities', type=list, location='json', required=False)
 
         args = parser.parse_args()
 
@@ -264,8 +318,7 @@ class PillarCapacityPlansResource(Resource):
             return {'message': f'No CapacityPlan found with ID: {capacity_plan_id} for Plan ID: {pillar_id}'}, 404
 
         capacity_plan.name = args['name']
-        capacity_plan.pillar = args['pillar']
-
+        
         # Remove old ResourceCapacities
         ResourceCapacity.query.filter_by(capacityPlan=capacity_plan_id).delete()
 
@@ -323,70 +376,46 @@ class PillarCapacityPlansResource(Resource):
         return {'message': 'CapacityPlan deleted successfully'}, 200
 
 
-@api.resource('/plans/<int:plan_id>/pillars')
-class PlanPillarsResource(Resource):
-    def get(self, plan_id):
-        pillars = Pillar.query.filter_by(plan=plan_id).all()
-        if not pillars:
-            return {'message': f'No Pillars found for Plan with ID: {plan_id}'}, 404
-
-        response = []
-
-        for pillar in pillars:
-            response.append({
-                'id': pillar.id,
-                'plan': pillar.plan,
-                'name': pillar.name,
-                'abbreviation': pillar.abbreviation,
-                'basePlan': pillar.basePlan,
-                'adjustmentPlan': pillar.adjustmentPlan,
-            })
-
-        return response, 200
-
-    def post(self, plan_id):
-        parser = reqparse.RequestParser()
-        parser.add_argument('name', type=str, required=True, help='Name cannot be blank')
-        parser.add_argument('abbreviation', type=str, required=True, help='Abbreviation cannot be blank')
-        parser.add_argument('basePlan', type=int, required=False)
-        parser.add_argument('adjustmentPlan', type=int, required=False)
-        args = parser.parse_args()
-
+@api.resource('/plans/<int:plan_id>/pillars/<int:pillar_id>')
+class PlanPillarResource(Resource):
+    def get(self, plan_id, pillar_id):
+        # Check if the Plan exists
         plan = Plan.query.get(plan_id)
-        if plan is None:
+        if not plan:
             return {'message': f'No Plan found with ID: {plan_id}'}, 404
 
-        if args['basePlan'] is None:
-            basePlan = CapacityPlan(name=f"Base Plan for {args['name']}", pillar=plan_id)
-            db.session.add(basePlan)
-            db.session.flush()  # flush the session to generate basePlan.id
-            args['basePlan'] = basePlan.id
+        # Check if the Pillar exists
+        pillar = Pillar.query.get(pillar_id)
+        if not pillar:
+            return {'message': f'No Pillar found with ID: {pillar_id}'}, 404
 
-        if args['adjustmentPlan'] is None:
-            adjustmentPlan = CapacityPlan(name=f"Adjustment Plan for {args['name']}", pillar=plan_id)
-            db.session.add(adjustmentPlan)
-            db.session.flush()  # flush the session to generate adjustmentPlan.id
-            args['adjustmentPlan'] = adjustmentPlan.id
+        # Get all the associated CapacityPlans
+        capacity_plans = CapacityPlan.query.filter_by(pillar=pillar_id).all()
+        if not capacity_plans:
+            return {'message': f'No CapacityPlans found for Pillar with ID: {pillar_id}'}, 404
 
-        new_pillar = Pillar(
-            plan=plan_id,
-            name=args['name'],
-            abbreviation=args['abbreviation'],
-            basePlan=args['basePlan'],
-            adjustmentPlan=args['adjustmentPlan']
-        )
+        pillar_data = {
+            'id': pillar.id,
+            'plan': pillar.plan,
+            'name': pillar.name,
+            'abbreviation': pillar.abbreviation,
+        }
 
-        db.session.add(new_pillar)
-        db.session.commit()
+        capacity_plans_dict = {}
+        for capacity_plan in capacity_plans:
+            capacity_plans_dict[capacity_plan.name] = {
+                'id': capacity_plan.id,
+                'pillar': capacity_plan.pillar
+            }
 
-        return {'message': 'Pillar created successfully', 'id': new_pillar.id}, 201
+        pillar_data['capacityPlans'] = capacity_plans_dict
+
+        return pillar_data, 200
 
     def put(self, plan_id, pillar_id):
         parser = reqparse.RequestParser()
         parser.add_argument('name', type=str, required=True, help='Name cannot be blank')
         parser.add_argument('abbreviation', type=str, required=True, help='Abbreviation cannot be blank')
-        parser.add_argument('basePlan', type=int, required=False)
-        parser.add_argument('adjustmentPlan', type=int, required=False)
         args = parser.parse_args()
 
         plan = Plan.query.get(plan_id)
@@ -397,27 +426,13 @@ class PlanPillarsResource(Resource):
         if pillar is None:
             return {'message': f'No Pillar found with ID: {pillar_id}'}, 404
 
-        if args['basePlan'] is None and pillar.basePlan is None:
-            basePlan = CapacityPlan(name=f"Base Plan for {args['name']}", pillar=plan_id)
-            db.session.add(basePlan)
-            db.session.flush()  # flush the session to generate basePlan.id
-            args['basePlan'] = basePlan.id
-
-        if args['adjustmentPlan'] is None and pillar.adjustmentPlan is None:
-            adjustmentPlan = CapacityPlan(name=f"Adjustment Plan for {args['name']}", pillar=plan_id)
-            db.session.add(adjustmentPlan)
-            db.session.flush()  # flush the session to generate adjustmentPlan.id
-            args['adjustmentPlan'] = adjustmentPlan.id
-
         pillar.name = args['name']
         pillar.abbreviation = args['abbreviation']
-        pillar.basePlan = args['basePlan'] or pillar.basePlan
-        pillar.adjustmentPlan = args['adjustmentPlan'] or pillar.adjustmentPlan
 
         db.session.commit()
 
         return {'message': 'Pillar updated successfully'}, 200
-
+   
     def delete(self, plan_id, pillar_id):
         plan = Plan.query.get(plan_id)
         if plan is None:
@@ -427,15 +442,14 @@ class PlanPillarsResource(Resource):
         if pillar is None:
             return {'message': f'No Pillar found with ID: {pillar_id}'}, 404
 
-        base_plan = CapacityPlan.query.get(pillar.basePlan)
-        adjustment_plan = CapacityPlan.query.get(pillar.adjustmentPlan)
-        
-        if base_plan:
-            db.session.delete(base_plan)
+        # Fetch all capacity plans related to this pillar
+        capacity_plans = CapacityPlan.query.filter_by(pillar=pillar.id).all()
 
-        if adjustment_plan:
-            db.session.delete(adjustment_plan)
+        # Delete all capacity plans related to this pillar
+        for capacity_plan in capacity_plans:
+            db.session.delete(capacity_plan)
 
+        # Delete the pillar itself
         db.session.delete(pillar)
         db.session.commit()
 
@@ -504,8 +518,8 @@ class PlanProjectsResource(Resource):
     def put(self, plan_id):
         parser = reqparse.RequestParser()
         parser.add_argument('id', type=int, required=True, help='Project ID cannot be blank')
-        parser.add_argument('name', type=str, required=False)
-        parser.add_argument('description', type=str, required=False)
+        parser.add_argument('name', type=str, required=True)
+        parser.add_argument('description', type=str, required=True)
         parser.add_argument('rank', type=int, required=False)
         parser.add_argument('state', type=str, required=False)
         parser.add_argument('docLink', type=str, required=False)
