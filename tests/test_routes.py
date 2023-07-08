@@ -128,7 +128,7 @@ def test_update_plan(app):
 
             # Assert: Check the response data
             assert response.status_code == 200
-            updated_plan = Plan.query.get(plan.id)
+            updated_plan = db.session.get(Plan, plan.id)
             assert updated_plan.name == 'Updated Plan'
             assert updated_plan.endDate.isoformat() == new_end_date
 
@@ -148,7 +148,7 @@ def test_delete_plan(app):
             assert response.get_json()['message'] == 'Plan deleted successfully'
 
             # Assert: Verify the plan is deleted
-            assert Plan.query.get(plan.id) is None
+            assert db.session.get(Plan, plan.id) is None
 
 def test_get_all_plans(app):
     # Use the app's context
@@ -253,7 +253,7 @@ def test_update_pillar(app):
             assert data['message'] == 'Pillar updated successfully'
 
             # Further assertions can be made here to check if the Pillar was correctly updated in the database
-            updated_pillar = Pillar.query.get(pillar.id)
+            updated_pillar = db.session.get(Pillar, pillar.id)
             assert updated_pillar.name == 'Updated Pillar'
             assert updated_pillar.abbreviation == 'UP'
 
@@ -285,13 +285,13 @@ def test_delete_pillar(app):
             assert data['message'] == f'Pillar with ID {pillar.id} deleted'
 
             # Further assertions can be made here to check if the Pillar and related CapacityPlans were correctly deleted from the database
-            deleted_pillar = Pillar.query.get(pillar.id)
+            deleted_pillar = db.session.get(Pillar, pillar.id)
             assert deleted_pillar is None
 
-            deleted_base_plan = CapacityPlan.query.get(base_plan.id)
+            deleted_base_plan = db.session.get(CapacityPlan, base_plan.id)
             assert deleted_base_plan is None
 
-            deleted_adjustment_plan = CapacityPlan.query.get(adjustment_plan.id)
+            deleted_adjustment_plan = db.session.get(CapacityPlan, adjustment_plan.id)
             assert deleted_adjustment_plan is None
 
 def test_get_specific_capacity_plan(app):
@@ -428,7 +428,7 @@ def test_delete_pillar_capacity_plan(app):
             assert response.status_code == 200
 
             # Fetch the deleted capacity plan from the database
-            deleted_capacity_plan = CapacityPlan.query.get(capacity_plan_id)
+            deleted_capacity_plan = db.session.get(CapacityPlan, capacity_plan_id)
 
             # Check if the capacity plan has been deleted
             assert deleted_capacity_plan is None
