@@ -90,32 +90,24 @@ def updateDeliveries(plan_id):
                 remaining_capacities[plan_slice] = 0
 
         # Set delivery slice of the project
-        # project['delivery_slice'] = delivery_slice
+        if delivery_slice is not None:
+            # Check if a delivery already exists for the plan and project
+            delivery = session.query(Delivery).filter_by(plan=plan_id, project=project['project_id']).first()
 
-        # Check if a delivery already exists for the plan and project
-        delivery = session.query(Delivery).filter_by(plan=plan_id, project=project['project_id']).first()
-
-        if delivery:
-            # Update the existing delivery
-            delivery.deliverySlice = delivery_slice
-        else:
-            # Insert a new delivery
-            new_delivery = Delivery(plan=plan_id,
-                                    project=project['project_id'],
-                                    deliverySlice=delivery_slice,
-                                    deliveredFlag=False,
-                                    startDate=None,
-                                    endDate=None)
-            session.add(new_delivery)
+            if delivery:
+                # Update the existing delivery
+                delivery.deliverySlice = delivery_slice
+            else:
+                # Insert a new delivery
+                new_delivery = Delivery(plan=plan_id,
+                                        project=project['project_id'],
+                                        deliverySlice=delivery_slice,
+                                        deliveredFlag=False,
+                                        startDate=None,
+                                        endDate=None)
+                session.add(new_delivery)
 
     # Commit the session to save changes to the database
     session.commit()
 
     return project_estimates
-
-
-
-
-
-
-

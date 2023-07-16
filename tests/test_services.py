@@ -1,4 +1,5 @@
 import random
+from typing import Dict
 import pytest
 from datetime import datetime, timedelta
 import json
@@ -6,96 +7,113 @@ from flask import jsonify
 from zkit.models import Plan, Pillar, CapacityPlan, ResourceCapacity, ResourceType, Delivery, Project, ProjectEstimate, db
 from zkit.services import updateDeliveries
 
-def create_baseline_zbb(planSlices=1, num_pillars=1, num_capacity_plans=1, num_resource_types=1, num_projects=1, num_project_estimates=1):
+json_file_pairs = [
+    ("zbb_json_1.json", "deliveries_json_1.json"),
+    ("zbb_json_2.json", "deliveries_json_2.json"),
+    # Add more pairs as needed...
+]
 
-    # Create a plan
-    plan = Plan(name='Test Plan', startDate=datetime.now(), endDate=datetime.now() + timedelta(days=365), cntSlices=planSlices)
-    db.session.add(plan)
-    db.session.commit()
 
-    # Create a pillar
-    for idx in range(num_pillars):
-        pillar = Pillar(name=f'Test Pillar {idx}', abbreviation=f'TP{idx}', plan=plan.id)
-        db.session.add(pillar)
-        db.session.commit()
-    pillars = ResourceType.query.all()
-
-    # Create a resource type
-    for idx in range(num_resource_types):
-        res_type = ResourceType(name=f'Test Resource Type {idx}', abbreviation=f'TRT{idx}')
-        db.session.add(res_type)
-        db.session.commit()
-    res_types = ResourceType.query.all()
-
-    # Create a capacity plan
-    for idx in range(num_capacity_plans):
-        #select a random pillar
-        pillar = pillars[idx % num_pillars]
-        capacity_plan = CapacityPlan(name=f'Test Capacity Plan {idx}', pillar=pillar.id)
-        db.session.add(capacity_plan)
-        db.session.commit()
-    capacity_plans = CapacityPlan.query.all()
-
-    for cp in capacity_plans:
-        # select a random resource type
-        res_type = res_types[cp.id % num_resource_types]
-        for i in range(planSlices):
-            resource_capacity = ResourceCapacity(capacity_plan=capacityPlan=cp.id, resType=res_type.id, planSlice=i, capacity=1)
-            db.session.add(resource_capacity)
-    db.session.commit()
-
-    for idx in range(num_projects):
-        # select a random pillar
-        pillar = pillars[idx % num_pillars]
-        project = Project(name=f'Test Project {idx}', pillar=pillar.id, plan=plan.id, rank=idx)
-        db.session.add(project)
-    db.session.commit()
-    projects = Project.query.all()
-
-    for project in projects:
-        # select a random resource type
-        res_type = res_types[project.id % num_resource_types]
-        # create a random number of project_estimates less than planSlices
-        estimate = random.randint(1, planSlices)
-        for i in range(estimate):
-            project_estimate = ProjectEstimate(project=project.id, resType=res_type.id, estimate=1)
-            db.session.add(project_estimate)
-    db.session.commit()
-
-    return {
-        'plan_id': plan.id,
-        'pillars': pillars,
-        'capacity_plans': capacity_plans,
-        'resource_types': res_types,
-        'projects': projects
-    }
-
-def test_update_deliveries(app):
+def create_zbb_from_json(app, data: Dict) -> Dict[str, int]:
     with app.app_context():
-        with app.test_client() as client:
+        # Start by creating a Plan
+        plan = Plan(data['plan']['name'], datetime.strptime(data['plan']['startDate'], "%Y-%m-%d"),
+                    datetime.strptime(data['plan']['endDate'], "%Y-%m-%d"), data['plan']['cntSlices'])
+        db.session.add(plan)
+        db.session.commit()
+
+        res_type_ids = {}
+        # Next, create ResourceTypes
+        for res_type in data['plan']['resourceTypes']:
+            res_type_obj = ResourceType.query.filter_by(name=res_type['name']).first()
+            if res_type_obj is None:
+                raise ValueError(f"ResourceType {res_type['name']} does not exist")
+            res_type_ids[res_type['name']] = res_type_obj.id
+
+        # Now, create Pillars, CapacityPlans, and ResourceCapacities
+        pillar_ids = {}
+        for pillar in data['plan']['pillars']:
+            pillar_obj = Pillar(pillar['name'], pillar['abbreviation'], plan.id)
+            db.session.add(pillar_obj)
+            db.session.commit()
+            pillar_ids[pillar['name']] = pillar_obj.id
+
+            for cp in pillar['capacityPlans']:
+                cp_obj = CapacityPlan(cp['name'], pillar_obj.id)
+                db.session.add(cp_obj)
+                db.session.commit()
+
+                for rc in cp['resourceCapacities']:
+                    if rc['resType'] not in res_type_ids:
+                        raise ValueError(f"ResourceType {rc['resType']} does not exist")
+                    rc_obj = ResourceCapacity(cp_obj.id, res_type_ids[rc['resType']], rc['planSlice'], rc['capacity'])
+                    db.session.add(rc_obj)
+                    db.session.commit()
+
+        # Finally, create Projects and ProjectEstimates
+        for project in data['plan']['projects']:
+            if project['pillar'] not in pillar_ids:
+                raise ValueError(f"Pillar {project['pillar']} does not exist")
+            if project['plan'] != plan.name:
+                raise ValueError(f"Plan {project['plan']} does not exist")
+                
+            project_obj = Project(project['name'], pillar_ids[project['pillar']], project['rank'], plan.id)
+            db.session.add(project_obj)
+            db.session.commit()
+
+            for pe in project['projectEstimates']:
+                if pe['resType'] not in res_type_ids:
+                    raise ValueError(f"ResourceType {pe['resType']} does not exist")
+                pe_obj = ProjectEstimate(project_obj.id, res_type_ids[pe['resType']], pe['estimate'])
+                db.session.add(pe_obj)
+                db.session.commit()
+
+        return {'plan_id': plan.id}
+    
+def compare_deliveries_from_json(app, plan_id: int, data: Dict) -> bool:
+    with app.app_context():
+        # Query the Plan from DB
+        plan = Plan.query.get(plan_id)
+        if plan is None:
+            raise ValueError(f"Plan with id {plan_id} does not exist")
+
+        # For each Delivery in the JSON data
+        for delivery in data['deliveries']:
+            # Look up the Project by name
+            project = Project.query.filter_by(name=delivery['project']).first()
+            if project is None:
+                raise ValueError(f"Project {delivery['project']} does not exist")
+
+            # Look up the Delivery by the project id and deliverySlice
+            db_delivery = Delivery.query.filter_by(project_id=project.id).first()
+            if db_delivery is None:
+                return False  # Delivery does not exist
             
-            zbb = create_baseline_zbb(planSlices=12, num_pillars=1, num_capacity_plans=1, num_resource_types=1, num_projects=1, num_project_estimates=1)
+            # Compare the deliverySlice if it is provided in the JSON
+            if 'deliverySlice' in delivery:
+                if db_delivery.deliverySlice != delivery['deliverySlice']:
+                    return False  # Delivery slices do not match
+            # Compare the startDate and endDate if they are provided in the JSON
+            if 'startDate' in delivery:
+                if db_delivery.startDate != datetime.strptime(delivery['startDate'], "%Y-%m-%d"):
+                    return False  # Start dates do not match
+            if 'endDate' in delivery:
+                if db_delivery.endDate != datetime.strptime(delivery['endDate'], "%Y-%m-%d"):
+                    return False  # End dates do not match
 
-            # Call updateDeliveries function
-            deliveries_updated = updateDeliveries(zbb['plan_id'])
+        # If we made it through all the deliveries without returning False, then they all match
+        return True
 
-            # Get all deliveries from the database
-            all_deliveries = Delivery.query.all()
+@pytest.mark.parametrize("zbb_json_file, deliveries_json_file", json_file_pairs)
+def test_update_deliveries(app, zbb_json_file, deliveries_json_file):
+    with app.app_context():
+        with open(zbb_json_file, 'r') as f:
+            zbb_data = json.load(f)
+        plan_id = create_zbb_from_json(app, zbb_data)['plan_id']
+        
+        updateDeliveries(plan_id)
 
-            # Assert that the number of deliveries equals the number of projects
-            assert len(all_deliveries) == len(zbb['projects'])
+        with open(deliveries_json_file, 'r') as f:
+            deliveries_data = json.load(f)
 
-            # Check each delivery's deliverySlice is not None
-            for delivery in all_deliveries:
-                assert delivery.deliverySlice is not None
-
-            # Check that the result from updateDeliveries matches the state of the database
-            for updated_delivery in deliveries_updated:
-                delivery = Delivery.query.filter_by(plan=updated_delivery['plan_id'], project=updated_delivery['project_id']).first()
-                assert delivery is not None
-                assert delivery.deliverySlice == updated_delivery['delivery_slice']
-
-
-            # Assert: Check the response data
-            #assert response.status_code == 200
-            #assert response.get_json()['name'] == 'Test Plan'
+        assert compare_deliveries_from_json(app, plan_id, deliveries_data)
